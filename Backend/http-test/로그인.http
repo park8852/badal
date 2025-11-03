@@ -1,0 +1,19 @@
+### 로그인 HTTP 요청
+
+POST http://127.0.0.1:8080/api/member/login
+Content-Type: application/json
+
+{
+  "userid": "test001",
+  "userpw": "test001"
+}
+
+{
+"responseType": "SUCCESS",
+"data": {
+"token": "토큰값",
+"userId": "test001",
+"role": "USER"
+},
+"message": "로그인이 완료되었습니다."
+}

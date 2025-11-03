@@ -1,0 +1,17 @@
+### 가게등록 HTTP 요청
+
+POST http://127.0.0.1:8080/api/member/register
+Content-Type: application/json
+
+{
+"category": "Korean",
+"name": "상훈분식",
+"address": "서울시 마포구 합정동 321",
+"phone": "02-555-6666",
+"openH": 9,
+"openM": 0,
+"closedH": 21,
+"closedM": 30,
+"createdAt": "2025-10-21"
+}
+

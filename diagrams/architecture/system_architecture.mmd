@@ -1,0 +1,83 @@
+graph TB
+    subgraph "클라이언트 영역"
+        Mobile[Mobile App<br/>사용자 주문 앱]
+        WebApp[Web App<br/>Next.js<br/>가맹점 관리]
+    end
+    
+    subgraph "API Gateway & 인증"
+        Auth[인증 필터<br/>JwtAuthFilter]
+        JWTUtil[JWT 유틸리티<br/>토큰 생성/검증]
+    end
+    
+    subgraph "Application Layer - Backend"
+        MC[MemberController<br/>회원 관리]
+        SC[StoreController<br/>가게 관리]
+        MnC[MenuController<br/>메뉴 관리]
+        OC[OrderController<br/>주문 관리]
+        BC[BoardController<br/>게시판]
+    end
+    
+    subgraph "Business Logic Layer"
+        MS[MemberService]
+        SS[StoreService]
+        MnS[MenuService]
+        OS[OrderService]
+        BS[BoardService]
+    end
+    
+    subgraph "Data Access Layer"
+        MR[MemberRepository]
+        SR[StoreRepository]
+        MnR[MenuRepository]
+        OR[OrderRepository]
+        BR[BoardRepository]
+    end
+    
+    subgraph "Infrastructure"
+        DB[(MariaDB<br/>데이터베이스)]
+        FS[FileStorage<br/>파일 저장소]
+        Config[FilterConfig<br/>WebConfig]
+    end
+    
+    Mobile -->|HTTPS| Auth
+    WebApp -->|HTTPS| Auth
+    
+    Auth -->|토큰 검증| JWTUtil
+    Auth -->|인증 성공| MC
+    Auth -->|인증 성공| SC
+    Auth -->|인증 성공| MnC
+    Auth -->|인증 성공| OC
+    Auth -->|인증 성공| BC
+    
+    MC --> MS
+    SC --> SS
+    MnC --> MnS
+    OC --> OS
+    BC --> BS
+    
+    MS --> MR
+    SS --> SR
+    MnS --> MnR
+    OS --> OR
+    BS --> BR
+    
+    MR --> DB
+    SR --> DB
+    MnR --> DB
+    OR --> DB
+    BR --> DB
+    
+    MC --> FS
+    SC --> FS
+    MnC --> FS
+    
+    Config --> Auth
+    
+    style Auth fill:#ffcccc
+    style JWTUtil fill:#ffcccc
+    style MC fill:#e1f5ff
+    style SC fill:#e1f5ff
+    style MnC fill:#e1f5ff
+    style OC fill:#e1f5ff
+    style DB fill:#ffe1e1
+    style FS fill:#fff4e1

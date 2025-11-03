@@ -1,0 +1,7 @@
+### 로그아웃 HTTP 요청
+
+GET http://127.0.0.1:8080/api/member/logout
+Content-Type: application/json
+
+{
+}

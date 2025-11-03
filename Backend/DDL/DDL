@@ -1,0 +1,132 @@
+-- 회원 정보
+CREATE TABLE `members` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `userid` VARCHAR(100) NOT NULL,
+    `userpw` VARCHAR(100) NOT NULL,
+    `name` VARCHAR(100) NOT NULL,
+    `birth` VARCHAR(20) NOT NULL,       -- DATETIME or VARCHAR
+    `phone` VARCHAR(20) NOT NULL,
+    `email` VARCHAR(255) NOT NULL,
+    `address` VARCHAR(255) NOT NULL,
+    `role` VARCHAR(10) NOT NULL,
+    `point` int(11) NOT NULL,
+    `created_at` VARCHAR(20) NOT NULL,  -- DATETIME or VARCHAR
+    PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 가게 정보
+CREATE TABLE `stores` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `member_id` INT NOT NULL,           -- 외래키(회원id)
+    `category` VARCHAR(20) NOT NULL,
+    `name` VARCHAR(100) NOT NULL,
+    `address` VARCHAR(255) NOT NULL,
+    `phone` VARCHAR(20) NOT NULL,
+    `open_h` INT NOT NULL,
+    `open_m` INT NOT NULL,
+    `closed_h` INT NOT NULL,
+    `closed_m` INT NOT NULL,
+    `created_at` VARCHAR(20) NOT NULL,  -- DATETIME or VARCHAR
+    PRIMARY KEY (`id`),
+    CONSTRAINT `fk_store_member_id`
+        FOREIGN KEY (`member_id`)
+        REFERENCES `members` (`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 메뉴 정보
+CREATE TABLE `menus` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `store_id` INT NOT NULL,            -- 외래키(상점id)
+    `title` VARCHAR(50) NOT NULL,
+    `content` VARCHAR(200) NOT NULL,
+    `price` INT NOT NULL,
+    `thumbnail` VARCHAR(100) NULL,      -- 이미지URL, 비어있을 시 기본 이미지 대체
+    PRIMARY KEY (`id`),
+    CONSTRAINT `fk_menu_store_id`
+        FOREIGN KEY (`store_id`)
+        REFERENCES `stores` (`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 주문 정보
+CREATE TABLE `orders` (
+    `id` INT NOT NULL AUTO_INCREMENT,
+    `store_id` INT NOT NULL,            -- 외래키(상점id)
+    `menu_id` INT NOT NULL,             -- 외래키(메뉴id)
+    `quantity` INT NOT NULL,            -- 주문 수량
+    `total_price` INT NOT NULL,         -- 총금액 (price * quantity)
+    `created_at` VARCHAR(20) NOT NULL,  -- 주문일자
+    PRIMARY KEY (`id`),
+        CONSTRAINT `fk_order_store_id`
+        FOREIGN KEY (`store_id`)
+        REFERENCES `stores` (`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    CONSTRAINT `fk_order_menu_id`
+        FOREIGN KEY (`menu_id`)
+        REFERENCES `menus` (`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 정산 정보
+CREATE TABLE `store_sales` (
+    `id` INT NOT NULL AUTO_INCREMENT,           -- PK
+    `store_id` INT NOT NULL,                    -- 가게 정보
+    `member_id` INT NOT NULL,                   -- 가게 주인 회원 ID
+    `account_info` VARCHAR(100) NOT NULL,       -- 계좌번호, 은행 등
+    `sale_date` VARCHAR(20) NOT NULL,           -- 정산 날짜 (일별, 월별 등)
+    `settlement_amount` INT NOT NULL,           -- 정산 금액
+    PRIMARY KEY (`id`),
+
+    CONSTRAINT `fk_store_sales_store_id`
+        FOREIGN KEY (`store_id`)
+        REFERENCES `stores`(`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+
+    CONSTRAINT `fk_store_sales_member_id`
+        FOREIGN KEY (`member_id`)
+        REFERENCES `members`(`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 게시판
+CREATE TABLE `boards` (
+    `id` INT NOT NULL AUTO_INCREMENT,          -- PK
+    `category` VARCHAR(20) NOT NULL,           -- 카테고리 (Q&A, NOTICE 등)
+    `member_id` INT NOT NULL,                  -- FK: 작성자 (members.id)
+    `title` VARCHAR(200) NOT NULL,             -- 제목
+    `content` TEXT NOT NULL,                   -- 내용 (문의 또는 공지)
+    `created_at` VARCHAR(20) NOT NULL,         -- 작성 시간
+    PRIMARY KEY (`id`),
+    CONSTRAINT `fk_board_member_id`
+        FOREIGN KEY (`member_id`)
+        REFERENCES `members` (`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 댓글
+CREATE TABLE `comments` (
+    `id` INT NOT NULL AUTO_INCREMENT,          -- PK
+    `board_id` INT NOT NULL,                   -- FK: 게시글 id (boards.id)
+    `member_id` INT NOT NULL,                  -- FK: 작성자 id (members.id)
+    `content` VARCHAR(500) NOT NULL,           -- 댓글 내용
+    `created_at` VARCHAR(20) NOT NULL,         -- 작성 시간
+    PRIMARY KEY (`id`),
+    CONSTRAINT `fk_comment_board_id`
+        FOREIGN KEY (`board_id`)
+        REFERENCES `boards` (`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE,
+    CONSTRAINT `fk_comment_member_id`
+        FOREIGN KEY (`member_id`)
+        REFERENCES `members` (`id`)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

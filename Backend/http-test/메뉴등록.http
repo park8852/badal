@@ -1,0 +1,22 @@
+### 메뉴등록 HTTP 요청
+
+POST http://127.0.0.1:8080/api/member/register
+Content-Type: application/json
+
+{
+"storeId": 3,
+"title": "불고기덮밥2",
+"content": "달콤한 불고기와 밥, 김치 포함",
+"price": 8500,
+"thumbnail": "https://example.com/images/bulgogi.jpg"
+}
+
+{
+"id": 3,
+"storeId": 3,
+"title": "불고기덮밥",
+"content": "달콤한 불고기와 밥, 김치 포함",
+"price": 8500,
+"thumbnail": "https://example.com/images/bulgogi.jpg"
+},
+

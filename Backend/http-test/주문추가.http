@@ -1,0 +1,12 @@
+###  주문추가 HTTP 요청
+
+POST http://127.0.0.1:8080/api/member/register
+Content-Type: application/json
+
+{
+"storeId": 3,
+"menuId": 3,
+"quantity": 3,
+"totalPrice": 27000,
+"createdAt": "2025-10-22"
+}

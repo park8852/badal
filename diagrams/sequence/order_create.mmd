@@ -1,0 +1,30 @@
+sequenceDiagram
+    participant User as 일반 사용자
+    participant Mobile as Mobile App
+    participant Backend as Backend API
+    participant DB as MariaDB
+    participant Menu as 메뉴 정보
+    participant Store as 가게 정보
+    
+    User->>Mobile: 메뉴 선택 및 주문
+    Mobile->>Backend: POST /api/order/create<br/>Authorization: Bearer {token}
+    
+    Backend->>Backend: JWT 토큰 검증
+    Backend->>DB: 사용자 정보 조회 (JWT에서 userid 추출)
+    Backend->>Menu: 메뉴 정보 조회
+    Menu-->>Backend: 가격 정보 반환
+    Backend->>Store: 가게 정보 조회
+    Store-->>Backend: 가게 정보 반환
+    
+    Backend->>Backend: 검증: 메뉴가 해당 가게 소속인지 확인
+    
+    alt 검증 실패
+        Backend-->>Mobile: ERROR: 상점에 있는 메뉴만 주문 가능
+        Mobile-->>User: 주문 실패 알림
+    else 검증 성공
+        Backend->>Backend: total_price = price * quantity 계산
+        Backend->>DB: 주문 정보 저장<br/>(member_id, store_id, menu_id,<br/>quantity, total_price, created_at)
+        DB-->>Backend: 주문 저장 완료
+        Backend-->>Mobile: SUCCESS: 주문 등록 완료
+        Mobile-->>User: 주문 완료 알림
+    end

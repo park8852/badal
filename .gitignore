@@ -1,0 +1,50 @@
+# ==========================
+# 공통
+# ==========================
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+*.log
+*.tmp
+
+.gradle/
+build/
+# ==========================
+# backend (Spring Boot)
+# ==========================
+/backend/build/
+/backend/.gradle/
+/backend/out/
+/backend/.classpath
+/backend/.project
+/backend/.settings
+/backend/.vscode
+/backend/logs/
+/backend/*.jar
+/backend/*.war
+
+# ==========================
+# frontend (React)
+# ==========================
+/frontend/node_modules/
+/frontend/build/
+/frontend/.env.local
+/frontend/.env.development.local
+/frontend/.env.test.local
+/frontend/.env.production.local
+/frontend/yarn-error.log
+/frontend/package-lock.json
+/frontend/yarn.lock
+
+# ==========================
+# mobile (Android/Kotlin)
+# ==========================
+/mobile/.gradle/
+/mobile/build/
+/mobile/app/build/
+/mobile/local.properties
+/mobile/.idea/
+/mobile/*.iml
+/mobile/captures/
+/mobile/.cxx/

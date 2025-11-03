@@ -1,0 +1,9 @@
+###  메뉴삭제 HTTP 요청
+
+DELETE http://127.0.0.1:8080/api/member/register
+Content-Type: application/json
+
+{
+
+    
+}

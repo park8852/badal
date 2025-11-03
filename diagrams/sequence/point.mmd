@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant User as 사용자
+    participant Mobile as Mobile App
+    participant Backend as Backend API
+    participant DB as MariaDB
+    
+    Note over Backend: ⚠️ 보안 취약점: 인증만으로<br/>충전 가능, 금액 검증 없음
+    
+    User->>Mobile: 충전할 포인트 입력
+    Mobile->>Backend: POST /api/member/point/add<br/>Authorization: Bearer {token}<br/>{point: 10000}
+    
+    Backend->>Backend: JWT 토큰 검증
+    Backend->>DB: 현재 포인트 조회
+    DB-->>Backend: 기존 포인트: 5000
+    
+    Note over Backend: 현재 로직: userPoint + pointDto.getPoint()<br/>→ 5000 + 10000 = 15000<br/><br/>⚠️ 문제점:<br/>1. 음수 입력 검증 없음<br/>2. 최대 금액 제한 없음<br/>3. 실제 결제 연동 없음
+    
+    Backend->>DB: UPDATE members SET point = 15000<br/>WHERE userid = 'user001'
+    DB-->>Backend: 업데이트 완료
+    
+    Backend-->>Mobile: SUCCESS: 포인트 충전 완료
+    Mobile-->>User: 충전 완료 알림

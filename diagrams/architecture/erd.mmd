@@ -1,0 +1,83 @@
+---
+config:
+  layout: elk
+---
+erDiagram
+	direction TB
+	MEMBERS {
+		int id PK ""  
+		varchar userid UK ""  
+		varchar userpw  ""  
+		varchar name  ""  
+		varchar birth  ""  
+		varchar phone  ""  
+		varchar email  ""  
+		varchar address  ""  
+		varchar role  ""  
+		int point  ""  
+		varchar created_at  ""  
+	}
+	STORES {
+		int id PK ""  
+		int member_id FK ""  
+		varchar category  ""  
+		varchar name  ""  
+		varchar address  ""  
+		varchar phone  ""  
+		int open_h  ""  
+		int open_m  ""  
+		int closed_h  ""  
+		int closed_m  ""  
+		varchar created_at  ""  
+	}
+	ORDERS {
+		int id PK ""  
+		int member_id FK ""  
+		int store_id FK ""  
+		int menu_id FK ""  
+		int quantity  ""  
+		int total_price  ""  
+		varchar created_at  ""  
+	}
+	MENUS {
+		int id PK ""  
+		int store_id FK ""  
+		varchar title  ""  
+		varchar content  ""  
+		int price  ""  
+		varchar thumbnail  ""  
+	}
+	STORE_SALES {
+		int id PK ""  
+		int store_id FK ""  
+		int member_id FK ""  
+		varchar account_info  ""  
+		varchar sale_date  ""  
+		int settlement_amount  ""  
+	}
+	BOARDS {
+		int id PK ""  
+		varchar category  ""  
+		int member_id FK ""  
+		varchar title  ""  
+		text content  ""  
+		varchar created_at  ""  
+	}
+	COMMENTS {
+		int id PK ""  
+		int board_id FK ""  
+		int member_id FK ""  
+		varchar content  ""  
+		varchar created_at  ""  
+	}
+
+	MEMBERS||--o{STORES:"has"
+	MEMBERS||--o{ORDERS:"places"
+	STORES||--o{MENUS:"has"
+	STORES||--o{ORDERS:"receives"
+	MENUS||--o{ORDERS:"in"
+	STORES||--o{STORE_SALES:"generates"
+	MEMBERS||--o{STORE_SALES:"receives"
+	MEMBERS||--o{BOARDS:"writes"
+	BOARDS||--o{COMMENTS:"has"
+	MEMBERS||--o{COMMENTS:"writes"

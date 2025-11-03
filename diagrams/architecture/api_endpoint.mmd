@@ -1,0 +1,55 @@
+graph LR
+    %% ---------------- 인증 API ----------------
+    subgraph "인증 API"
+        A1[POST /api/member/register<br/>회원가입]
+        A2[POST /api/member/login<br/>로그인]
+        A3[POST /api/member/logout<br/>로그아웃]
+        A4[GET /api/member/info<br/>정보 조회]
+        A5[POST /api/member/info<br/>정보 수정]
+    end
+
+    %% ---------------- 포인트 API ----------------
+    subgraph "포인트 API"
+        P1[POST /api/member/point/add<br/>포인트 충전]
+        P2[GET /api/member/point/info<br/>포인트 조회]
+        P3[POST /api/member/point/info<br/>포인트 수정]
+    end
+
+    %% ---------------- 가게 API ----------------
+    subgraph "가게 API"
+        S1[POST /api/store/create<br/>가게 등록]
+        S2[GET /api/store/all<br/>전체 조회]
+        S3[GET /api/store/info/&lbrace;id&rbrace;<br/>정보 조회]
+        S4[POST /api/store/info<br/>정보 수정]
+        S5[GET /api/store/delete/&lbrace;id&rbrace;<br/>가게 삭제]
+        S6[GET /api/store/search<br/>가게 검색]
+    end
+
+    %% ---------------- 메뉴 API ----------------
+    subgraph "메뉴 API"
+        M1[POST /api/menu/create<br/>메뉴 등록]
+        M2[GET /api/menu/info/&lbrace;id&rbrace;<br/>메뉴 조회]
+        M3[GET /api/menu/store/&lbrace;storeId&rbrace;<br/>가게별 메뉴 조회]
+        M4[POST /api/menu/info/&lbrace;id&rbrace;<br/>메뉴 수정]
+        M5[GET /api/menu/delete/&lbrace;id&rbrace;<br/>메뉴 삭제]
+    end
+
+    %% ---------------- 주문 API ----------------
+    subgraph "주문 API"
+        O1[POST /api/order/create<br/>주문 생성]
+        O2[GET /api/order/list<br/>전체 주문 조회]
+        O3[GET /api/order/&lbrace;id&rbrace;<br/>주문 상세]
+        O4[GET /api/order/member<br/>사용자 주문 조회]
+        O5[GET /api/order/store/&lbrace;id&rbrace;<br/>가게 주문 조회]
+        O6[POST /api/order/day<br/>기간별 조회]
+        O7[POST /api/order/update<br/>주문 수정]
+        O8[GET /api/order/delete/&lbrace;id&rbrace;<br/>주문 삭제]
+        O9[POST /api/order/sales<br/>매출 통계]
+    end
+
+    %% ---------------- 스타일 ----------------
+    style A1 fill:#e1f5ff
+    style P1 fill:#ffcccc
+    style S1 fill:#fff4e1
+    style M1 fill:#e1ffe1
+    style O1 fill:#f4e1ff

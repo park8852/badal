@@ -1,0 +1,23 @@
+### 회원정보 변경 HTTP 요청
+
+POST http://127.0.0.1:8080/api/member/register
+Content-Type: application/json
+
+##헤더의 토큰
+{
+"name": "장상훈",
+"birth": "1998-01-01",
+”phone”: “010-1234-5678”,
+”email”: “test@test.com”,
+”address”: “서울특별시 중구 ~~”,
+}
+
+{
+"responseType": "SUCCESS",
+"data": {
+"token": "토큰값",
+"userId": "test001",
+"role": "USER"
+},
+"message": "정보가 수정되었습니다."
+}

@@ -1,0 +1,61 @@
+graph TB
+    subgraph "클라이언트 계층"
+        Mobile[Mobile App<br/>사용자용]
+        WebFE[Frontend<br/>Next.js<br/>가맹점 관리]
+    end
+    
+    subgraph "인증 계층"
+        JWT[JWT 인증<br/>1시간 유효]
+        Filter[JWT Auth Filter]
+    end
+    
+    subgraph "백엔드 계층 (Spring Boot)"
+        Controller[Controller Layer]
+        Service[Service Layer]
+        Repository[Repository Layer<br/>JDBC Template]
+    end
+    
+    subgraph "데이터 계층"
+        DB[(MariaDB<br/>d_project)]
+        FileStorage[File Storage<br/>webapp/upload]
+    end
+    
+    subgraph "데이터베이스 테이블"
+        Members[(members)]
+        Stores[(stores)]
+        Menus[(menus)]
+        Orders[(orders)]
+        Sales[(store_sales)]
+        Boards[(boards)]
+    end
+    
+    Mobile -->|REST API| Controller
+    WebFE -->|REST API| Controller
+    
+    Controller --> Filter
+    Filter --> JWT
+    
+    JWT -->|인증 성공| Controller
+    Controller --> Service
+    Service --> Repository
+    Repository --> DB
+    
+    Service --> FileStorage
+    
+    DB --> Members
+    DB --> Stores
+    DB --> Menus
+    DB --> Orders
+    DB --> Sales
+    DB --> Boards
+    
+    Members -.->|FK| Stores
+    Stores -.->|FK| Menus
+    Stores -.->|FK| Orders
+    Menus -.->|FK| Orders
+    
+    style Controller fill:#e1f5ff
+    style Service fill:#fff4e1
+    style Repository fill:#e1ffe1
+    style DB fill:#ffe1e1
+    style JWT fill:#ffcccc

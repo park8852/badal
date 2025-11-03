@@ -1,0 +1,30 @@
+sequenceDiagram
+    participant Owner as 가게 주인
+    participant Frontend as 가맹점 웹 UI
+    participant Backend as Backend API
+    participant DB as MariaDB
+    participant JWT as JWT 검증
+    
+    Owner->>Frontend: 메뉴 정보 입력<br/>(제목, 내용, 가격, 이미지)
+    Frontend->>Backend: POST /api/menu/create<br/>Authorization: Bearer {token}<br/>FormData
+    
+    Backend->>JWT: 토큰 검증
+    JWT-->>Backend: userid 반환
+    
+    Backend->>DB: 사용자 role 확인
+    DB-->>Backend: role = "OWNER"
+    
+    Backend->>DB: 가게 ID 조회 (member_id 기반)
+    DB-->>Backend: store_id
+    
+    Backend->>Backend: 파일 업로드 처리<br/>(최대 10MB)
+    
+    alt 이미지 업로드 성공
+        Backend->>DB: 메뉴 정보 저장<br/>(store_id, title, content,<br/>price, thumbnail)
+        DB-->>Backend: 저장 완료
+        Backend-->>Frontend: SUCCESS: 메뉴 등록 완료
+        Frontend-->>Owner: 등록 완료 알림
+    else 파일 처리 실패
+        Backend-->>Frontend: ERROR: 파일 업로드 실패
+        Frontend-->>Owner: 오류 알림
+    end

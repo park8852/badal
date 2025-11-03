@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant User as 사용자
+    participant Frontend as Frontend/Mobile
+    participant Backend as Backend API
+    participant DB as MariaDB
+    participant Store as Store Service
+    
+    User->>Frontend: 아이디/비밀번호 입력
+    Frontend->>Backend: POST /api/member/login<br/>{userid, userpw}
+    
+    Backend->>DB: 사용자 인증 확인
+    DB-->>Backend: 사용자 정보
+    
+    alt 인증 실패
+        Backend-->>Frontend: ERROR: 로그인 실패
+        Frontend-->>User: 로그인 실패 메시지
+    else 인증 성공
+        Backend->>Backend: JWT 토큰 생성<br/>(유효기간: 1시간)
+        Backend->>Store: 가게 정보 조회
+        Store-->>Backend: 가게 ID
+        
+        Backend->>Backend: 응답 구성<br/>(token, userid, storeId, role)
+        
+        Backend-->>Frontend: SUCCESS: {token, userid, storeId, role}
+        Frontend->>Frontend: localStorage에 토큰 저장
+        Frontend-->>User: 로그인 성공 및 메인 화면 이동
+    end

@@ -1,0 +1,12 @@
+###  메뉴추가 HTTP 요청
+
+POST http://127.0.0.1:8080/api/member/register
+Content-Type: application/json
+
+{
+"storeId": 3,
+"title": "매운불고기덮밥",
+"content": "매콤한 불고기와 밥, 김치 포함",
+"price": 9000,
+"thumbnail": "https://example.com/images/spicy_bulgogi.jpg"
+}
