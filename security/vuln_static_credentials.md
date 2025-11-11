@@ -21,8 +21,8 @@
 - 필요한 정보는 서버에서 발급·주기적으로 갱신할 것
 
 ## 진단 세부 사항
-- APK 디컴파일 후 자바·리소스·환경 파일을 전수 검사했으나 고정된 계정, API Key, 마스터 토큰이 발견되지 않음
-- 민감 문자열은 모두 런타임 시 서버에서 수신하거나 로컬에 저장되지 않는 패턴으로 확인됨
+- APK 디컴파일 후 `Mobile/namtang_app/src/main/java/com/baro/baro_baedal/` 이하 Kotlin 파일과 `res/values/strings.xml` 등을 grep으로 검사했으나 고정된 계정, API Key, 마스터 토큰이 발견되지 않음
+- `app/src/main/java/com/baro/baro_baedal/network/` 패키지의 Retrofit 설정에서도 인증 정보 하드코딩이 없고, 모든 민감 문자열은 서버 응답으로 동적으로 주입됨
 
 ### 재현 절차 (검증 과정)
 Step 1) `apktool d baro-baedal.apk` 명령으로 APK를 디컴파일함  
