@@ -62,12 +62,13 @@ Step 0) Burp Suite 실행 → `User Options > Display > Language`에서 **한국
 - 모든 API 호출은 기본적으로 `Authorization: Bearer <JWT>` 헤더를 요구하지만, 코드 분석 결과 일부 엔드포인트는 실제로 토큰 검증을 수행하지 않았다.
 
 ### V-01. 주문 삭제 API 인증 우회 (Critical)
-**취약점 분류**: OWASP Top 10 2021 A01 – Broken Access Control  
-**취약점 발생 위치**: `GET http://localhost:8080/api/order/delete/{id}`  
-**관련 화면**: 관리자 대시보드 → `주문 관리` → 주문 상세 → 삭제 버튼  
-**취약점 발생 파라미터**: Path Parameter `id`  
-**변조한 파라미터 값**: `3` (다른 사용자의 주문 번호)  
-**상태**: 취약
+- **취약점 분류**: OWASP Top 10 2021 A01 – Broken Access Control  
+- **취약점 발생 위치**: `GET http://localhost:8080/api/order/delete/3`  
+- **취약점 발생 파라미터**: Path Parameter `id`  
+- **변조한 파라미터 값**: `3` (타 사용자 주문 번호)  
+- **재현 화면 경로**: 관리자 대시보드 → `주문 관리` → 주문 상세 → 우측 상단 `삭제` 버튼  
+- **Burp 요청 캡처 위치**: Proxy > Intercept (한국어 UI)  
+- **상태**: 취약
 
 **요약**  
 `OrderController.delete()` 메서드는 `jwtUtil.auth()`를 호출하지 않아 토큰 없이도 접근 가능하다. 임의의 주문 번호를 전달하면 인증 없이 데이터베이스에서 해당 주문이 삭제된다.
@@ -107,12 +108,13 @@ Content-Type: application/json
 ---
 
 ### V-02. 주문 금액·주문자 조작 (High)
-**취약점 분류**: OWASP Top 10 2021 A05 – Security Misconfiguration / A04 – Insecure Design  
-**취약점 발생 위치**: `POST http://localhost:8080/api/order/update`  
-**관련 화면**: 관리자 대시보드 → `주문 관리` → 주문 상세 → (수정 기능은 UI에 없으나 API 직접 호출 가능)  
-**취약점 발생 파라미터**: JSON Body (`id`, `memberId`, `storeId`, `menuId`, `quantity`, `totalPrice`)  
-**변조한 파라미터 값**: `totalPrice = 100`, `memberId = 999`  
-**상태**: 취약
+- **취약점 분류**: OWASP Top 10 2021 A05 – Security Misconfiguration / A04 – Insecure Design  
+- **취약점 발생 위치**: `POST http://localhost:8080/api/order/update`  
+- **취약점 발생 파라미터**: JSON Body `totalPrice`, `memberId`, `id`  
+- **변조한 파라미터 값**: `totalPrice = 100`, `memberId = 999`, `id = 5`  
+- **재현 화면 경로**: 관리자 대시보드 → `주문 관리` → 주문 카드 선택 → 상세 패널  
+- **Burp 요청 캡처 위치**: Proxy > HTTP history에서 `POST /api/order/update` 전송  
+- **상태**: 취약
 
 **요약**  
 `OrderController.update()`는 토큰 검증과 입력 필터링 없이 요청 본문을 그대로 `orderService.updateOrder()`에 전달한다. 공격자는 타인의 주문 번호를 지정한 뒤 총 금액과 주문자 식별자를 원하는 값으로 덮어쓸 수 있다.
@@ -155,12 +157,13 @@ Content-Type: application/json
 ---
 
 ### V-03. 포인트 무제한 적립 (High)
-**취약점 분류**: OWASP Top 10 2021 A04 – Insecure Design  
-**취약점 발생 위치**: `POST http://localhost:8080/api/member/point/add`  
-**관련 화면**: 관리자 대시보드 → `마이페이지` → 포인트 충전 (API 직접 호출)  
-**취약점 발생 파라미터**: JSON Body `point`  
-**변조한 파라미터 값**: `point = 999999999`  
-**상태**: 취약
+- **취약점 분류**: OWASP Top 10 2021 A04 – Insecure Design  
+- **취약점 발생 위치**: `POST http://localhost:8080/api/member/point/add`  
+- **취약점 발생 파라미터**: JSON Body `point`  
+- **변조한 파라미터 값**: `point = 999999999`  
+- **재현 화면 경로**: 관리자 대시보드 → `마이페이지` → 하단 `포인트 충전` 버튼  
+- **Burp 요청 캡처 위치**: Proxy > Intercept에서 `POST /api/member/point/add` 조작  
+- **상태**: 취약
 
 **요약**  
 `addPoint()`는 현재 포인트에 요청값을 단순 더한 뒤 저장한다. 한도 검증, 음수/과대 입력 제한, 중복 요청 방지가 없다.
@@ -196,13 +199,14 @@ Content-Type: application/json
 
 ---
 
-### V-04. 추측 가능한 관리자 인증 정보 (Medium)
-**취약점 분류**: OWASP Top 10 2021 A07 – Identification and Authentication Failures  
-**취약점 발생 위치**: `POST http://localhost:8080/api/member/login`  
-**관련 화면**: `http://localhost:3000/login`  
-**취약점 발생 파라미터**: `userid`, `userpw`  
-**변조한 파라미터 값**: `userid = admin01`, `userpw = adminpw`  
-**상태**: 취약
+### V-04. 추측 가능한 관리자 자격 증명 (Medium)
+- **취약점 분류**: OWASP Top 10 2021 A07 – Identification and Authentication Failures  
+- **취약점 발생 위치**: `POST http://localhost:8080/api/member/login`  
+- **취약점 발생 파라미터**: JSON Body `userid`, `userpw`  
+- **변조한 파라미터 값**: `userid = admin01`, `userpw = adminpw` (사전 추측 가능 패턴)  
+- **재현 화면 경로**: `http://localhost:3000/login` → ID/비밀번호 입력 후 `로그인` 버튼  
+- **Burp 요청 캡처 위치**: Proxy > HTTP history에서 `POST /api/member/login` 확인  
+- **상태**: 취약
 
 **요약**  
 초기 관리자 계정이 `admin01/adminpw`와 같이 쉽게 추측 가능한 패턴으로 생성되어 있으며, 추가적인 계정 잠금/2FA가 없어 무차별 대입 시 바로 접속이 가능하다.
@@ -241,10 +245,11 @@ HTTP/1.1 200
 ---
 
 ### V-05. 대시보드 화면 내 개인정보 평문 노출 (주의)
-**취약점 분류**: 개인정보보호법 제29조 기술적 보호조치 — 단말기 화면 내 중요정보 노출  
-**취약점 발생 위치**: `http://localhost:3000/dashboard` (API `GET /api/order/{id}`)  
-**노출 항목**: 고객명, 전화번호, 주소, 결제 방법  
-**상태**: 주의 (보완 필요)
+- **점검 기준**: 개인정보보호법 제29조 기술적 보호조치 — 단말기 화면 내 중요정보 노출  
+- **노출 화면 위치**: `http://localhost:3000/dashboard` → 주문 카드 선택 시 우측 상세 패널  
+- **데이터 제공 API**: `GET http://localhost:8080/api/order/{id}`  
+- **노출 항목**: 고객명, 전화번호, 주소, 결제 방법  
+- **상태**: 주의 (보완 필요)
 
 **요약**  
 주문 상세 화면에 고객 이름·전화번호·주소가 그대로 노출된다. 가맹점 운영에는 필요하지만, 화면 캡처나 어깨너머 공격에 취약하며, 점주 계정 탈취 시 대량 개인정보 유출이 즉시 발생한다.
@@ -286,7 +291,21 @@ Step 2) Burp Suite로 응답을 확인하면 HTTP 200과 함께 사용자 메시
   - 양호: 비정상 입력을 전달해도 서버가 에러 처리 또는 차단하고, 데이터가 노출·변조되지 않는다.  
   - 취약: `' OR '1'='1`, `UNION SELECT` 등 페이로드로 인증 성공, 데이터 노출, 쿼리 구조 변경이 발생한다.  
 - **조치방법**: 서버는 PreparedStatement/ORM 바인딩을 사용하고 입력값을 화이트리스트·길이 제한으로 검증한다. 앱은 쿼리 문자열 직접 조합을 지양하고, 에러 응답에 SQL 정보를 포함하지 않도록 한다.  
-- **진단 세부 사항(취약점 발생 시)**: N/A
+
+**재현 절차 (방어 동작 확인)**  
+Step 1) Burp Suite(언어: 한국어) Proxy를 활성화한 상태로 로그인 화면(`http://localhost:3000/login`)에서 임의 사용자 ID/비밀번호를 입력하고 `로그인` 버튼을 클릭한다.  
+![G02-Step1](./evidence/g02_step1_login.png "로그인 화면에서 잘못된 자격 증명을 입력하는 모습")
+
+Step 2) Intercept된 요청의 `userid` 값을 `' OR '1'='1`로 바꾸고, `userpw`도 임의 값으로 유지한 채 Forward 한다. 서버는 HTTP 200과 함께 `responseType":"ERROR"` 및 메시지 “로그인 실패”를 반환하며 인증을 차단한다. SQL 오류 메시지는 노출되지 않는다.  
+![G02-Step2](./evidence/g02_step2_burp.png "Burp Suite에서 SQL Injection 페이로드를 적용한 요청과 차단 응답")
+
+Step 3) 동일한 페이로드를 주문 목록 API(`GET http://localhost:8080/api/order/list?id=' UNION SELECT ...`)에 적용했을 때 서버는 HTTP 400과 메시지 “잘못된 요청입니다.”를 반환하여 쿼리 구조가 변경되지 않았음을 확인하였다.  
+![G02-Step3](./evidence/g02_step3_response.png "주문 API가 비정상 쿼리를 차단한 응답 화면")
+
+**판정 근거 및 비고**  
+- `MemberRepository`와 주요 DAO에서 `JdbcTemplate` 파라미터 바인딩을 사용하여 입력값이 문자열로 직접 연결되지 않음을 로그로 확인.  
+- Burp Proxy 기록과 서버 로그 모두에서 SQL 스택 트레이스나 데이터 노출이 발생하지 않았음.  
+- 공격 시도가 차단되었으므로 **양호** 판정(‘내용 없음’이 아닌 ‘공격 차단 확인’)으로 기록.
 
 ---
 
