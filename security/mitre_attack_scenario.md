@@ -2,8 +2,8 @@
 
 ## 📋 개요
 
-MITRE ATT&CK 프레임워크를 기반으로 배달 서비스 "바로배달"에 대한 체계적인 침투 시나리오입니다.
-파일 업로드, SQL Injection, XSS 취약점을 연계하여 정보수집부터 EXPLOIT까지의 전체 공격 경로를 단계별로 설명합니다.
+MITRE ATT&CK 프레임워크를 기반으로 배달 서비스 "바로배달"에 대한 체계적인 침투 시나리오임
+파일 업로드, SQL Injection, XSS 취약점을 연계하여 정보수집부터 EXPLOIT까지의 전체 공격 경로를 단계별로 설명함
 
 ---
 
@@ -695,7 +695,7 @@ dependency('org.springframework.boot:spring-boot-starter-security')
 ## 🎯 결론
 
 이 시나리오는 **파일 업로드 → SQL Injection → XSS** 순으로 취약점을 연계하여 
-**정보수집부터 EXPLOIT까지의 전체 공격 체인**을 보여줍니다.
+**정보수집부터 EXPLOIT까지의 전체 공격 체인**을 보여줌
 
 ### 핵심 포인트
 
